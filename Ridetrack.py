@@ -203,17 +203,17 @@ class SensorFusion:
         start_time = time.time()  # Start time
 
         ECU_Raw_Data = pd.read_csv(data_path, header=None)
-        ECU_Raw_Data = ECU_Raw_Data.drop(ECU_Raw_Data.index[0:2])
-        ECU_Raw_Data_0F = ECU_Raw_Data[ECU_Raw_Data.index%2 == 0 ]
-        ECU_Raw_Data_0E = ECU_Raw_Data[ECU_Raw_Data.index%2 == 1 ]
+        ECU_Raw_Data = ECU_Raw_Data.drop(ECU_Raw_Data.index[0:2])  # 去掉前面2個raw
+        ECU_Raw_Data_0F = ECU_Raw_Data[ECU_Raw_Data.index%2 == 0 ]  # 奇數raw為0F解碼 (因為index從0開始)
+        ECU_Raw_Data_0E = ECU_Raw_Data[ECU_Raw_Data.index%2 == 1 ]  # 偶數raw為0E解碼
 
         Reverse_ECU_Data_Feature = ["ECU Absolute Time", "Atmospheric Pressure", "Inclination Switch", "Fault Code Count", "Ignition Coil Current Diagnosis", "Fault Light Mileage", "Engine Operating Time", "Ignition Advance Angle", "Idling Correction Ignition Angle", "Fuel Injection Prohibition Mode", "Injection Mode", "Bypass Delay Correction", "ABV Opening", "ABV Idling Correction", "ABV Learning Value",  "Lambda Setting", "Air-Fuel Ratio Rich", "Closed Loop Control", "Air Flow", "Throttle Valve Air Flow", "Intake Manifold Pressure", "Intake Manifold Front Pressure", "MFF_AD_ADD_MMV_REL", "MFF_AD_FAC_MMV_REL", "MFF_AD_ADD_MMV", "MFF_AD_FAC_MMV", "Fuel Injection Quantity", "MFF_WUP_COR", "Ignition Mode", "Engine RPM", "Engine RPM Limit", "Idling Target RPM", "Fuel Injection Start Angle", "Fuel Pump State", "Engine State", "Engine Temperature", "Water Temperature PWM", "Ignition Magnetization Time", "Fuel Injection Time", "Closed Loop Fuel Correction","Intake Temperature", "Combustion Chamber Intake Temperature", "TPS Opening", "TPS Idling Learning Value", "Battery Voltage", "O2 Voltage", "Vehicle Speed", "TPS Voltage", "Seat Switch State"]
         Reverse_ECU_Data = []
 
-        for row in range(min(len(ECU_Raw_Data_0E),len(ECU_Raw_Data_0F))):
+        for row in range(min(len(ECU_Raw_Data_0E),len(ECU_Raw_Data_0F))):  # 先編列索引[0, 1, 2, ...]
             Reverse_ECU_Data.append(row)
             
-        Reverse_ECU_Data = pd.DataFrame(columns = Reverse_ECU_Data_Feature ,index=Reverse_ECU_Data)
+        Reverse_ECU_Data = pd.DataFrame(columns = Reverse_ECU_Data_Feature ,index=Reverse_ECU_Data)  # 加入column欄位與索引
 
 
         print("\n【Reverse Engineering Restores ECU Data Part 1 (1/2)】")
@@ -1847,12 +1847,12 @@ class else_:
             plt.scatter([], [], c=colors[i], label=f"Action Element {i}")
 
         # 點
-        plt.scatter(DataSet_Action1_Length,  DataSet_Action1[Feature], c=[colors[x] for x in DataSet_Action1 ['Action Element']], zorder=2)
+        plt.scatter(DataSet_Action1_Length,  DataSet_Action1[Feature], c=[colors[x] for x in DataSet_Action1 ['Action Element']], zorder=2, s=10)
 
         # 線 
         plt.plot(DataSet_Action1_Length, DataSet_Action1[Feature][DataSet_Action1['Action'] == Action1], c='LightBlue' , label=Action1, linewidth=10, zorder=1)    
 
-        plt.scatter(DataSet_Action2_Length, DataSet_Action2[Feature], c=[colors[x] for x in DataSet_Action2['Action Element']], zorder=2)
+        plt.scatter(DataSet_Action2_Length, DataSet_Action2[Feature], c=[colors[x] for x in DataSet_Action2['Action Element']], zorder=2, s=10)
 
         plt.plot(DataSet_Action2_Length, DataSet_Action2[Feature][DataSet_Action2['Action'] == Action2], c='LightGreen' , label=Action2, linewidth=10, zorder=1)
 
