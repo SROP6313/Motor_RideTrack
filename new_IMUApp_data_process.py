@@ -1,8 +1,23 @@
 import pandas as pd
 import numpy as np
 
-# Read the csv file
-df = pd.read_csv('20240521_angle_test/Gyroscope.csv')
+# Load the Excel file
+file_path = './20240526_test.xls'
+
+# Read the Accelerometer and Gyroscope sheets
+accelerometer_df = pd.read_excel(file_path, sheet_name='Accelerometer', engine='xlrd')
+gyroscope_df = pd.read_excel(file_path, sheet_name='Gyroscope', engine='xlrd')
+
+# 合併兩個DataFrame，並Drop the 'Time (s)' column from the Gyroscope sheet
+combined_df = pd.concat([accelerometer_df, gyroscope_df.drop(columns=['Time (s)'])], axis=1, ignore_index=False)
+
+# Rename the columns
+combined_df = combined_df.rename(columns={'Acceleration x (m/s^2)': 'X-axis Acceleration', 
+                                          'Acceleration y (m/s^2)': 'Y-axis Acceleration',
+                                          'Acceleration z (m/s^2)': 'Z-axis Acceleration',
+                                          'Gyroscope x (rad/s)': 'X-axis Angular Velocity',
+                                          'Gyroscope y (rad/s)': 'Y-axis Angular Velocity',
+                                          'Gyroscope z (rad/s)': 'Z-axis Angular Velocity'})
 
 # Define the sampling rate (30 Hz)
 sampling_rate = 30
@@ -11,18 +26,24 @@ sampling_rate = 30
 dt = 1 / sampling_rate
 
 # Convert angular velocity from rad/s to deg/s
-df['Gyroscope x (deg/s)'] = df['Gyroscope x (rad/s)'] * 180 / np.pi
-df['Gyroscope y (deg/s)'] = df['Gyroscope y (rad/s)'] * 180 / np.pi
-df['Gyroscope z (deg/s)'] = df['Gyroscope z (rad/s)'] * 180 / np.pi
+combined_df['Gyroscope x (deg/s)'] = combined_df['X-axis Angular Velocity'] * 180 / np.pi
+combined_df['Gyroscope y (deg/s)'] = combined_df['Y-axis Angular Velocity'] * 180 / np.pi
+combined_df['Gyroscope z (deg/s)'] = combined_df['Z-axis Angular Velocity'] * 180 / np.pi
 
 # Calculate cumulative angle (assuming 30Hz sampling rate)
-df['X-axis Angle'] = (df['Gyroscope x (deg/s)'] * dt).cumsum()
-df['Y-axis Angle'] = (df['Gyroscope y (deg/s)'] * dt).cumsum()
-df['Z-axis Angle'] = (df['Gyroscope z (deg/s)'] * dt).cumsum()
+combined_df['X-axis Angle'] = (combined_df['Gyroscope x (deg/s)'] * dt).cumsum()
+combined_df['Y-axis Angle'] = (combined_df['Gyroscope y (deg/s)'] * dt).cumsum()
+combined_df['Z-axis Angle'] = (combined_df['Gyroscope z (deg/s)'] * dt).cumsum()
+
+combined_df.drop(columns=['Gyroscope x (deg/s)', 'Gyroscope y (deg/s)', 'Gyroscope z (deg/s)'])
 
 # Add the cumulative angle columns to the original DataFrame
-df = df[['Time (s)', 'Gyroscope x (rad/s)', 'Gyroscope y (rad/s)', 'Gyroscope z (rad/s)',
-         'X-axis Angle', 'Y-axis Angle', 'Z-axis Angle']]
+combined_df = combined_df[['Time (s)', 'X-axis Acceleration', 'Y-axis Acceleration', 'Z-axis Acceleration',
+                            'X-axis Angular Velocity', 'Y-axis Angular Velocity', 'Z-axis Angular Velocity',
+                            'X-axis Angle', 'Y-axis Angle', 'Z-axis Angle']]
 
-# Save the updated DataFrame to a new csv file
-df.to_csv('20240521_angle_test.csv', index=False)
+# 保存合併後的數據到csv文件
+output_csv_path = './20240526_test_combined_data.csv'
+combined_df.to_csv(output_csv_path, index=False)
+
+print("Data combined and saved to combined_data.csv successfully.")
