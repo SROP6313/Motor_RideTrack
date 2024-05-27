@@ -137,43 +137,76 @@ class SensorFusion:
         Function: Used for processing data from a car-mounted Axis.
 
         Parameters:
-            Data_Path: Path of the TXT file containing the data from the car-mounted device.
+            Data_Path: Path of the XLS file containing the data from the car-mounted device.
             Data_Save_Path: Path of the CSV file to save the processed data.
 
         Python Libraries:
             pandas: Used for handling CSV data.
             numpy: Used for performing scientific computing.
-            tqdm: Used for displaying progress bars.
         """
         
         start_time = time.time()  # Start time
 
-        Axis_Raw_Data = pd.read_csv(data_path, header=None)
-        Reverse_Axis_Data_Feature = ["Absolute Time", "X-axis Angular Velocity", "Y-axis Angular Velocity", "Z-axis Angular Velocity", "X-axis Acceleration", "Y-axis Acceleration", "Z-axis Acceleration", "X-axis Angle", "Y-axis Angle", "Z-axis Angle"]
-        Axis_Raw_Data = np.array(Axis_Raw_Data)
-        row_lengh, column_lengh = Axis_Raw_Data.shape
-        Axis_Raw_Data = Axis_Raw_Data.reshape(int(column_lengh/len(Reverse_Axis_Data_Feature)),len(Reverse_Axis_Data_Feature))
+        # Load the Excel file
+        xls = pd.ExcelFile(data_path)
         
+        # Read the Metadata Time sheet
+        metadata_time_df = pd.read_excel(xls, sheet_name='Metadata Time')
         
-        Reverse_Axis_Data = []
-        for x in range(int(column_lengh/len(Reverse_Axis_Data_Feature))):
-            Reverse_Axis_Data.append(x)
-        Reverse_Axis_Data = pd.DataFrame(columns = Reverse_Axis_Data_Feature ,index=Reverse_Axis_Data)
+        # Extract the START value from the "system time text" column
+        start_time_str = metadata_time_df.loc[0, 'system time text']
         
+        # Remove the time zone information and parse the START time into a datetime object
+        start_time_str = start_time_str.split(' UTC')[0]
+        start_datetime = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S.%f')
         
-        print("\nReading 3-axis data in part1 (1/2)")
-        for row in tqdm(range(int(column_lengh/len(Reverse_Axis_Data_Feature)))):
-            for column in range(len(Reverse_Axis_Data_Feature)):    
-                Reverse_Axis_Data.iloc[row][column] = Axis_Raw_Data[row][column]
+        # Read the Accelerometer and Gyroscope sheets
+        accelerometer_df = pd.read_excel(xls, sheet_name='Accelerometer', engine='xlrd')
+        gyroscope_df = pd.read_excel(xls, sheet_name='Gyroscope', engine='xlrd')
         
+        # Combine the two DataFrames and drop the 'Time (s)' column from the Gyroscope sheet
+        Reverse_Axis_Data = pd.concat([accelerometer_df, gyroscope_df.drop(columns=['Time (s)'])], axis=1, ignore_index=False)
         
-        print("\nReading sampling time in part2 (2/2)")
-        for row in tqdm(range (len(Reverse_Axis_Data)-1)):
-            Reverse_Axis_Data['Absolute Time'][row] = Reverse_Axis_Data['Absolute Time'][row][2:len(Reverse_Axis_Data['Absolute Time'][row])]
-            Reverse_Axis_Data['Absolute Time'].iloc[row] = pd.to_datetime(Reverse_Axis_Data['Absolute Time'].iloc[row],unit='ms',utc=True).tz_convert('Asia/Taipei') 
-            Reverse_Axis_Data['Z-axis Angle'][row] = Reverse_Axis_Data['Z-axis Angle'][row][1:len(Reverse_Axis_Data['Z-axis Angle'][row])-1]
+        # Rename the columns
+        Reverse_Axis_Data = Reverse_Axis_Data.rename(columns={
+            'Acceleration x (m/s^2)': 'X-axis Acceleration', 
+            'Acceleration y (m/s^2)': 'Y-axis Acceleration',
+            'Acceleration z (m/s^2)': 'Z-axis Acceleration',
+            'Gyroscope x (rad/s)': 'X-axis Angular Velocity',
+            'Gyroscope y (rad/s)': 'Y-axis Angular Velocity',
+            'Gyroscope z (rad/s)': 'Z-axis Angular Velocity'
+        })
         
-        Reverse_Axis_Data['Z-axis Angle'][(len(Reverse_Axis_Data)-1)] = Reverse_Axis_Data['Z-axis Angle'][(len(Reverse_Axis_Data)-1)][1:len(Reverse_Axis_Data['Z-axis Angle'][(len(Reverse_Axis_Data)-1)])-2]
+        # Define the sampling rate (30 Hz)
+        sampling_rate = 30
+        
+        # Calculate the time difference between consecutive samples (in seconds)
+        dt = 1 / sampling_rate
+        
+        # Convert angular velocity from rad/s to deg/s
+        Reverse_Axis_Data['Gyroscope x (deg/s)'] = Reverse_Axis_Data['X-axis Angular Velocity'] * 180 / np.pi
+        Reverse_Axis_Data['Gyroscope y (deg/s)'] = Reverse_Axis_Data['Y-axis Angular Velocity'] * 180 / np.pi
+        Reverse_Axis_Data['Gyroscope z (deg/s)'] = Reverse_Axis_Data['Z-axis Angular Velocity'] * 180 / np.pi
+        
+        # Calculate cumulative angle (assuming 30Hz sampling rate)
+        Reverse_Axis_Data['X-axis Angle'] = (Reverse_Axis_Data['Gyroscope x (deg/s)'] * dt).cumsum()
+        Reverse_Axis_Data['Y-axis Angle'] = (Reverse_Axis_Data['Gyroscope y (deg/s)'] * dt).cumsum()
+        Reverse_Axis_Data['Z-axis Angle'] = (Reverse_Axis_Data['Gyroscope z (deg/s)'] * dt).cumsum()
+        
+        # Drop temporary columns used for calculations
+        Reverse_Axis_Data = Reverse_Axis_Data.drop(columns=['Gyroscope x (deg/s)', 'Gyroscope y (deg/s)', 'Gyroscope z (deg/s)'])
+        
+        # Calculate the Absolute Time and format it
+        Reverse_Axis_Data['Absolute Time'] = Reverse_Axis_Data['Time (s)'].apply(
+            lambda x: (start_datetime + timedelta(seconds=x)).strftime('%Y-%m-%d %H:%M:%S.%f') + '+08:00'
+        )
+        
+        # Reorganize the DataFrame to include relevant columns
+        Reverse_Axis_Data = Reverse_Axis_Data[[
+            'X-axis Angular Velocity', 'Y-axis Angular Velocity', 'Z-axis Angular Velocity',
+            'X-axis Acceleration', 'Y-axis Acceleration', 'Z-axis Acceleration',           
+            'X-axis Angle', 'Y-axis Angle', 'Z-axis Angle', 'Absolute Time'
+        ]]
 
         if save_path:
             try:
