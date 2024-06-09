@@ -1,5 +1,5 @@
 ## Label Data App .EXE file Download
-[Clickme](https://github.com/SROP6313/Motor_RideTrack/releases/tag/v1.1)
+[Clickme](https://github.com/SROP6313/Motor_RideTrack/releases)
 
 ## Label Data App Python Environment Setup
 Use Anaconda .yml file
