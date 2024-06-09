@@ -2,6 +2,7 @@
 
 import tkinter as tk
 from tkinter import filedialog, ttk
+import tkinter.messagebox as messagebox
 import cv2
 from PIL import Image, ImageTk
 import pandas as pd
@@ -127,15 +128,29 @@ class VideoPlayer:
 
 def main():
     root = tk.Tk()
-    root.title("KDD RideTrack Label System App v1.1")
+    root.title("KDD RideTrack Label System App v1.2")
 
-    # Load video file
-    video_path = filedialog.askopenfilename(title='Select Video File')
-    csv_file_path = filedialog.askopenfilename(title='Select IMU CSV File')
-    start_time = "2024-01-25 12:49:53.056000+08:00"
+    # Prompt user to enter start time
+    start_time = None
+    while start_time is None:
+        start_time_str = tk.simpledialog.askstring("Start Time", "Please enter the time when THE VIDEO STARTS (YYYY-MM-DD HH:MM:SS).")
+        if start_time_str is None:
+            break
+        else:
+            try:
+                start_time = datetime.strptime(start_time_str, "%Y-%m-%d %H:%M:%S")
+                start_time = start_time.isoformat(timespec='milliseconds') + "+08:00"
+            except ValueError:
+                messagebox.showerror("Invalid Format", f"Invalid start time format: {start_time_str}\nPlease try again.")
+                start_time = None
 
-    player = VideoPlayer(root, video_path, csv_file_path, start_time)
-    root.mainloop()
+    if start_time != None:
+        # Load video file
+        video_path = filedialog.askopenfilename(title='Select Video File')
+        csv_file_path = filedialog.askopenfilename(title='Select IMU CSV File')
+
+        player = VideoPlayer(root, video_path, csv_file_path, start_time)
+        root.mainloop()
 
 if __name__ == "__main__":
     main()
