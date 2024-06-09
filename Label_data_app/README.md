@@ -7,4 +7,4 @@ Use Anaconda .yml file
 conda env create -f label_data_app.yml
 ```
 UI view :  
-![image](https://github.com/SROP6313/Motor_RideTrack/assets/103128273/6939b103-d61d-492a-9248-fc148487e0b0)
+![image](https://github.com/SROP6313/Motor_RideTrack/assets/103128273/c82455cc-4ab5-4fe1-b615-c4f62698d715)
