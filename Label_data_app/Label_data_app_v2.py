@@ -181,12 +181,12 @@ class VideoPlayer:
 
 def main():
     root = tk.Tk()
-    root.title("KDD RideTrack Label System App v2.0")
+    root.title("KDD RideTrack Label System App v2.1")
 
     # Prompt user to enter start time
     start_time = None
     while start_time is None:
-        start_time_str = tk.simpledialog.askstring("Start Time", "Please enter the time when THE VIDEO STARTS (YYYY-MM-DD HH:MM:SS).")
+        start_time_str = tk.simpledialog.askstring("Start Time", "Please enter the time when THE VIDEO STARTS RECORDING (YYYY-MM-DD HH:MM:SS).")
         if start_time_str is None:
             break
         else:
