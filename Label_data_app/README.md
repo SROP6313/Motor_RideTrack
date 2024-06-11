@@ -21,7 +21,7 @@ python Label_data_app_v2.py
 #### 4. Select IMU csv file
 ![image](https://github.com/SROP6313/Motor_RideTrack/assets/103128273/04eafe1d-9d85-4beb-bbb8-97938b3087d5)
 
-#### 5. Click "Play" button to play the video selected
+#### 5. Click "Play" button to play the video you selected
 ![image](https://github.com/SROP6313/Motor_RideTrack/assets/103128273/c2b0589f-629f-4ff1-bbe8-af4f6da64489)
 
 #### 6. Mark the action at any time you want
