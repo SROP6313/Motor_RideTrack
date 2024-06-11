@@ -132,7 +132,7 @@ class SensorFusion:
 
 
     # 處理IMU資料
-    def Axis_Process(self, data_path: str, save_path: str) -> None:
+    def Axis_Process(self, data_path: str, save_path: str, app_time_error) -> None:
         """
         Function: Used for processing data from a car-mounted Axis.
 
@@ -160,6 +160,9 @@ class SensorFusion:
         start_time_str = start_time_str.split(' UTC')[0]
         start_datetime = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S.%f')
         
+        # Subtract some seconds from the start time (The APP's error: slower than real time)
+        start_datetime = start_datetime - timedelta(seconds=app_time_error)
+
         # Read the Accelerometer and Gyroscope sheets
         accelerometer_df = pd.read_excel(xls, sheet_name='Accelerometer', engine='xlrd')
         gyroscope_df = pd.read_excel(xls, sheet_name='Gyroscope', engine='xlrd')
@@ -551,7 +554,7 @@ class SensorFusion:
 
 
 
-    # 校正加速度角速度使用
+    # 校正加速度與角速度使用
     def calibrate_imu(self, dataset: pd.DataFrame, k: int, save_path: Optional[str] = None) -> pd.DataFrame:
         """
         Function: Used for calibrating IMU data.
