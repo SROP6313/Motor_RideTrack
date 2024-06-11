@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-def process_imu_data(input_file, output_file):
+def process_imu_data(input_file, output_file, app_time_error):
     # Load the Excel file
     xls = pd.ExcelFile(input_file)
     
@@ -16,6 +16,9 @@ def process_imu_data(input_file, output_file):
     start_time_str = start_time_str.split(' UTC')[0]
     start_datetime = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S.%f')
     
+    # Subtract some seconds from the start time (The APP's error: slower than real time)
+    start_datetime = start_datetime - timedelta(seconds=app_time_error)
+
     # Read the Accelerometer and Gyroscope sheets
     accelerometer_df = pd.read_excel(xls, sheet_name='Accelerometer', engine='xlrd')
     gyroscope_df = pd.read_excel(xls, sheet_name='Gyroscope', engine='xlrd')
@@ -68,6 +71,6 @@ def process_imu_data(input_file, output_file):
     Reverse_Axis_Data.to_csv(output_file, index=False)
 
 # Usage
-process_imu_data('./20240526_test.xls', './output.csv')
+process_imu_data('./20240611_data/20240611_kino.xls', './20240611_data/20240611_kino.csv', app_time_error=3)
 
 print("Data processed and saved to output CSV file successfully.")
