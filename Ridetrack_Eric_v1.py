@@ -28,6 +28,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.gaussian_process import GaussianProcessClassifier
+from scipy.spatial.transform import Rotation as R
 
 
 
@@ -166,7 +167,12 @@ class SensorFusion:
         # Read the Accelerometer and Gyroscope sheets
         accelerometer_df = pd.read_excel(xls, sheet_name='Accelerometer', engine='xlrd')
         gyroscope_df = pd.read_excel(xls, sheet_name='Gyroscope', engine='xlrd')
-        
+
+        # Adjust the length of the dataframes to be the same
+        min_length = min(len(accelerometer_df), len(gyroscope_df))
+        accelerometer_df = accelerometer_df.iloc[:min_length]
+        gyroscope_df = gyroscope_df.iloc[:min_length]
+
         # Combine the two DataFrames and drop the 'Time (s)' column from the Gyroscope sheet
         Reverse_Axis_Data = pd.concat([accelerometer_df, gyroscope_df.drop(columns=['Time (s)'])], axis=1, ignore_index=False)
         
@@ -191,10 +197,29 @@ class SensorFusion:
         Reverse_Axis_Data['Gyroscope y (deg/s)'] = Reverse_Axis_Data['Y-axis Angular Velocity'] * 180 / np.pi
         Reverse_Axis_Data['Gyroscope z (deg/s)'] = Reverse_Axis_Data['Z-axis Angular Velocity'] * 180 / np.pi
         
-        # Calculate cumulative angle (assuming 30Hz sampling rate)
-        Reverse_Axis_Data['X-axis Angle'] = (Reverse_Axis_Data['Gyroscope x (deg/s)'] * dt).cumsum()
-        Reverse_Axis_Data['Y-axis Angle'] = (Reverse_Axis_Data['Gyroscope y (deg/s)'] * dt).cumsum()
-        Reverse_Axis_Data['Z-axis Angle'] = (Reverse_Axis_Data['Gyroscope z (deg/s)'] * dt).cumsum()
+        # Initialize arrays to store the calculated Euler angles
+        num_samples = len(Reverse_Axis_Data)
+        roll = np.zeros(num_samples)
+        pitch = np.zeros(num_samples)
+        yaw = np.zeros(num_samples)
+        
+        # Initialize the rotation matrix
+        r = R.from_euler('xyz', [0, 0, 0], degrees=True)
+        
+        # Iterate through each sample to calculate the Euler angles
+        for i in range(1, num_samples):
+            # Update the rotation matrix with the new gyroscope measurements
+            r = r * R.from_euler('xyz', [Reverse_Axis_Data['Gyroscope x (deg/s)'][i] * dt,
+                                        Reverse_Axis_Data['Gyroscope y (deg/s)'][i] * dt,
+                                        Reverse_Axis_Data['Gyroscope z (deg/s)'][i] * dt], degrees=True)
+            
+            # Extract the Euler angles from the rotation matrix
+            roll[i], pitch[i], yaw[i] = r.as_euler('xyz', degrees=True)
+        
+        # Add the calculated Euler angles to the DataFrame
+        Reverse_Axis_Data['Pitch (deg)'] = pitch
+        Reverse_Axis_Data['Roll (deg)'] = roll
+        Reverse_Axis_Data['Yaw (deg)'] = yaw
         
         # Drop temporary columns used for calculations
         Reverse_Axis_Data = Reverse_Axis_Data.drop(columns=['Gyroscope x (deg/s)', 'Gyroscope y (deg/s)', 'Gyroscope z (deg/s)'])
@@ -208,7 +233,7 @@ class SensorFusion:
         Reverse_Axis_Data = Reverse_Axis_Data[[
             'X-axis Angular Velocity', 'Y-axis Angular Velocity', 'Z-axis Angular Velocity',
             'X-axis Acceleration', 'Y-axis Acceleration', 'Z-axis Acceleration',           
-            'X-axis Angle', 'Y-axis Angle', 'Z-axis Angle', 'Absolute Time'
+            'Pitch (deg)', 'Roll (deg)', 'Yaw (deg)', 'Absolute Time'
         ]]
 
         if save_path:
@@ -491,7 +516,7 @@ class SensorFusion:
         calibrated_data = dataset.copy()
 
         # Convert DataFrame to numpy array for efficiency
-        angles_array = dataset[['X-axis Angle', 'Y-axis Angle', 'Z-axis Angle']].to_numpy()
+        angles_array = dataset[['Pitch (deg)', 'Roll (deg)', 'Yaw (deg)']].to_numpy()
         calibrated_angles_array = angles_array.copy()
 
         # Define the initial angles
@@ -513,7 +538,7 @@ class SensorFusion:
             calibrated_angles_array[i, :] = np.degrees(new_angles)
 
         # Update the DataFrame
-        calibrated_data[['X-axis Angle', 'Y-axis Angle', 'Z-axis Angle']] = calibrated_angles_array
+        calibrated_data[['Pitch (deg)', 'Roll (deg)', 'Yaw (deg)']] = calibrated_angles_array
 
         if save_path:
             try:
