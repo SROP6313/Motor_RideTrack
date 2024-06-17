@@ -140,9 +140,11 @@ class VideoPlayer:
     def play(self):
         self.paused = False
         self.update()
+        self.play_button.config(state=tk.DISABLED)
 
     def pause(self):
         self.paused = True
+        self.play_button.config(state=tk.NORMAL)
 
     def mark_action(self, action):
         self.current_action = action
