@@ -133,7 +133,7 @@ class SensorFusion:
 
 
     # 處理IMU資料
-    def Axis_Process(self, data_path: str, save_path: str, app_time_error) -> None:
+    def Axis_Process(self, data_path: str, save_path: str, app_time_error, window_size_sec=4) -> None:
         """
         Function: Used for processing data from a car-mounted Axis.
 
@@ -203,15 +203,22 @@ class SensorFusion:
         pitch = np.zeros(num_samples)
         yaw = np.zeros(num_samples)
         
-        # Initialize the rotation matrix
-        r = R.from_euler('xyz', [0, 0, 0], degrees=True)
+        # Define the window size (4 seconds * 30 Hz = 120 samples)
+        window_size = window_size_sec * sampling_rate
         
         # Iterate through each sample to calculate the Euler angles
-        for i in range(1, num_samples):
-            # Update the rotation matrix with the new gyroscope measurements
-            r = r * R.from_euler('xyz', [Reverse_Axis_Data['Gyroscope x (deg/s)'][i] * dt,
-                                        Reverse_Axis_Data['Gyroscope y (deg/s)'][i] * dt,
-                                        Reverse_Axis_Data['Gyroscope z (deg/s)'][i] * dt], degrees=True)
+        for i in trange(num_samples, desc="Calculating the Euler angles"):
+            # Calculate the start of the window
+            window_start = max(0, i - window_size + 1)
+            
+            # Initialize the rotation matrix for this window
+            r = R.from_euler('xyz', [0, 0, 0], degrees=True)
+            
+            # Calculate rotation within the window
+            for j in range(window_start, i + 1):
+                r = r * R.from_euler('xyz', [Reverse_Axis_Data['Gyroscope x (deg/s)'][j] * dt,
+                                            Reverse_Axis_Data['Gyroscope y (deg/s)'][j] * dt,
+                                            Reverse_Axis_Data['Gyroscope z (deg/s)'][j] * dt], degrees=True)
             
             # Extract the Euler angles from the rotation matrix
             roll[i], pitch[i], yaw[i] = r.as_euler('xyz', degrees=True)
