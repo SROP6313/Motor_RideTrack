@@ -11,19 +11,33 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import time
+import os
+from tqdm import tqdm
 
 def convert_time(time_str):
     return pd.to_datetime(time_str, format='mixed')
 
-def resize_frame(frame, width=720, height=540):
-    return cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+def create_low_quality_video(input_path, output_path, width=720, height=540):
+    cap = cv2.VideoCapture(input_path)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, cap.get(cv2.CAP_PROP_FPS), (width, height))
+
+    for _ in tqdm(range(total_frames), desc="Converting to low quality", unit="frames"):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        resized_frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+        out.write(resized_frame)
+
+    cap.release()
+    out.release()
 
 class VideoPlayer:
     def __init__(self, root, video_path, csv_file_path, start_time):
         self.root = root
-        self.video_path = video_path
+        self.original_video_path = video_path
         self.csv_file_path = csv_file_path
-        self.cap = cv2.VideoCapture(video_path)
         self.start_time = datetime.fromisoformat(start_time)
         self.current_frame_time = self.start_time
         self.paused = True
@@ -36,9 +50,24 @@ class VideoPlayer:
         self.df = pd.read_csv(self.csv_file_path)
         self.df['Absolute Time'] = self.df['Absolute Time'].apply(convert_time)
 
+        self.create_low_quality_video()
+        self.cap = cv2.VideoCapture(self.low_quality_video_path)
+
         self.create_plot()
         self.create_ui()
         self.update()
+
+    def create_low_quality_video(self):
+        base, ext = os.path.splitext(self.original_video_path)
+        self.low_quality_video_path = f"{base}_low_quality.mp4"
+        
+        if not self.original_video_path.endswith("_low_quality.mp4"):
+            print("Creating low quality video...")
+            create_low_quality_video(self.original_video_path, self.low_quality_video_path)
+            print("Low quality video created successfully.")
+        else:
+            print("Input video is already a low quality version. Using it directly.")
+            self.low_quality_video_path = self.original_video_path
 
     def create_ui(self):
         left_frame = tk.Frame(self.root)
@@ -122,7 +151,6 @@ class VideoPlayer:
 
                 if ret:
                     self.current_frame_time += timedelta(seconds=1/self.cap.get(cv2.CAP_PROP_FPS) * self.playback_speed)
-                    frame = resize_frame(frame)  # Resize the frame
                     cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     img = Image.fromarray(cv2image)
                     imgtk = ImageTk.PhotoImage(image=img)
@@ -219,7 +247,7 @@ class VideoPlayer:
 
 def main():
     root = tk.Tk()
-    root.title("KDD RideTrack Label System App v2.1")
+    root.title("KDD RideTrack Label System App v2.2")
 
     start_time = None
     while start_time is None:
