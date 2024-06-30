@@ -1,7 +1,7 @@
 # Make sure use the "label_data_app" conda environment
 
 import tkinter as tk
-from tkinter import filedialog, ttk, IntVar
+from tkinter import filedialog, ttk, IntVar, BooleanVar
 import tkinter.messagebox as messagebox
 import cv2
 from PIL import Image, ImageTk
@@ -46,9 +46,14 @@ class VideoPlayer:
         self.playback_speed = 1.0
         self.plot_type = IntVar()
         self.plot_type.set(0)  # 默認為 "Angle"
+        self.show_background = BooleanVar()
+        self.show_background.set(False)  # 默認不顯示背景區塊        
 
         self.df = pd.read_csv(self.csv_file_path)
         self.df['Absolute Time'] = self.df['Absolute Time'].apply(convert_time)
+
+        if 'Action' not in self.df.columns:
+            self.df['Action'] = ''  # Add empty 'Action' column if it doesn't exist
 
         self.create_low_quality_video()
         self.cap = cv2.VideoCapture(self.low_quality_video_path)
@@ -123,6 +128,11 @@ class VideoPlayer:
         tk.Radiobutton(plot_type_frame, text="Angle", variable=self.plot_type, value=0, command=self.update_plot).pack(side=tk.LEFT)
         tk.Radiobutton(plot_type_frame, text="Acceleration", variable=self.plot_type, value=1, command=self.update_plot).pack(side=tk.LEFT)
         tk.Radiobutton(plot_type_frame, text="Angular Velocity", variable=self.plot_type, value=2, command=self.update_plot).pack(side=tk.LEFT)
+
+        # Add checkbox for background blocks
+        background_frame = tk.Frame(button_frame)
+        background_frame.pack(side=tk.TOP, pady=5)
+        tk.Checkbutton(background_frame, text="Show Action Label (May cause the app SLOWER !!)", variable=self.show_background, command=self.update_plot).pack(side=tk.LEFT)
 
         self.plot_canvas.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
 
@@ -203,6 +213,7 @@ class VideoPlayer:
         print("CSV file saved successfully")
 
     def update_plot(self):
+        self.ax.clear()
         curr_time = self.current_frame_time
         mask = (self.df['Absolute Time'] <= curr_time)
         times = (self.df.loc[mask, 'Absolute Time'] - self.start_time) / pd.Timedelta(seconds=1)
@@ -224,13 +235,43 @@ class VideoPlayer:
             z_data = self.df.loc[mask, 'Z-axis Angular Velocity']
             self.ax.set_ylabel('Angular Velocity (deg/s)')
 
-        self.line_x.set_data(times, x_data)
-        self.line_y.set_data(times, y_data)
-        self.line_z.set_data(times, z_data)
+        self.ax.plot(times, x_data, lw=1, label='X')
+        self.ax.plot(times, y_data, lw=1, label='Y')
+        self.ax.plot(times, z_data, lw=1, label='Z')
 
+        if self.show_background.get():
+            self.add_background_blocks(times)
+
+        self.ax.set_xlabel('Time (s)')
+        self.ax.legend()
         self.ax.relim()
         self.ax.autoscale_view(True, True, True)
         self.plot_canvas.draw()
+
+    def add_background_blocks(self, times):
+        colors = {
+            'Go Straight': 'lightblue',
+            'Idle': 'lightgrey',
+            'Turn Left': 'lightgreen',
+            'Turn Right': 'coral',
+            'Two-Stage Left': 'yellow',
+            'U-turn': 'violet'
+        }
+        actions = list(colors.keys())
+        added_labels = set()
+        prev_action = None
+        start = 0
+        for i, time in enumerate(times):
+            current_action = self.df.loc[self.df.index[i], 'Action']
+            if current_action != prev_action:
+                if prev_action in actions:
+                    if prev_action not in added_labels:
+                        self.ax.axvspan(start, time, color=colors[prev_action], alpha=0.3, label=f'{prev_action}')
+                        added_labels.add(prev_action)
+                    else:
+                        self.ax.axvspan(start, time, color=colors[prev_action], alpha=0.3)
+                start = time
+            prev_action = current_action
 
     def on_progress_change(self, value):
         if self.cap.isOpened():
