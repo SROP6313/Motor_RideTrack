@@ -69,7 +69,7 @@ class VideoPlayer:
         if not self.original_video_path.endswith("_low_quality.mp4"):
             print("Creating low quality video...")
             create_low_quality_video(self.original_video_path, self.low_quality_video_path)
-            print("Low quality video created successfully.")
+            print("Low quality video created successfully. Using it now.")
         else:
             print("Input video is already a low quality version. Using it directly.")
             self.low_quality_video_path = self.original_video_path
@@ -96,6 +96,10 @@ class VideoPlayer:
         self.play_button.pack(side=tk.LEFT)
         self.pause_button = tk.Button(top_row_frame, text="Pause", command=self.pause)
         self.pause_button.pack(side=tk.LEFT)
+        self.backward_button = tk.Button(top_row_frame, text="<< 1s", command=self.backward_one_second)
+        self.backward_button.pack(side=tk.LEFT)
+        self.forward_button = tk.Button(top_row_frame, text="1s >>", command=self.forward_one_second)
+        self.forward_button.pack(side=tk.LEFT)        
 
         speed_frame = tk.Frame(button_frame)
         speed_frame.pack(side=tk.TOP)
@@ -151,6 +155,37 @@ class VideoPlayer:
         self.ax.set_xlabel('Time')
         self.ax.legend()
 
+    def forward_one_second(self):
+        current_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        fps = self.cap.get(cv2.CAP_PROP_FPS)
+        new_frame = min(current_frame + int(fps), int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - 1)
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, new_frame)
+        self.current_frame_time += timedelta(seconds=1)
+        self.update_frame()
+
+    def backward_one_second(self):
+        current_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+        fps = self.cap.get(cv2.CAP_PROP_FPS)
+        new_frame = max(current_frame - int(fps), 0)
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, new_frame)
+        self.current_frame_time -= timedelta(seconds=1)
+        self.update_frame()
+
+    def update_frame(self):
+        ret, frame = self.cap.read()
+        if ret:
+            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(cv2image)
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+
+            elapsed_time = (self.current_frame_time - self.start_time).total_seconds()
+            self.progress_label.config(text=f"Time: {str(self.current_frame_time)}")
+            self.progress.set(elapsed_time / self.total_duration * 100)
+
+            self.update_plot()
+    
     def update(self):
         if not self.paused:
             if self.cap.isOpened():
@@ -161,17 +196,7 @@ class VideoPlayer:
 
                 if ret:
                     self.current_frame_time += timedelta(seconds=1/self.cap.get(cv2.CAP_PROP_FPS) * self.playback_speed)
-                    cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    img = Image.fromarray(cv2image)
-                    imgtk = ImageTk.PhotoImage(image=img)
-                    self.video_label.imgtk = imgtk
-                    self.video_label.configure(image=imgtk)
-
-                    elapsed_time = (self.current_frame_time - self.start_time).total_seconds()
-                    self.progress_label.config(text=f"Time: {str(self.current_frame_time)}")
-                    self.progress.set(elapsed_time / self.total_duration * 100)
-
-                    self.update_plot()
+                    self.update_frame()
 
             self.root.after(10, self.update)
 
