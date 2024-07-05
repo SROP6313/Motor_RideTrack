@@ -7,7 +7,7 @@
 conda env create -f label_data_app.yml
 ```
 
-## Usage (for v2.1)
+## Usage (for v2.2)
 #### 1. Just excute the EXE file or in terminal run
 ```
 python Label_data_app_v2.py
@@ -22,11 +22,13 @@ python Label_data_app_v2.py
 ![image](https://github.com/SROP6313/Motor_RideTrack/assets/103128273/04eafe1d-9d85-4beb-bbb8-97938b3087d5)
 
 #### 5. Click "Play" button to play the video you selected
-![image](https://github.com/SROP6313/Motor_RideTrack/assets/103128273/1bc586a9-38b9-46ca-abf6-5193be975b77)
+![image](https://github.com/SROP6313/Motor_RideTrack/assets/103128273/c15649e5-2353-4fcd-bc73-d710a28471a1)
 
-#### 6. Mark the action at any time you want
+#### 6. Mark the behavior at any time you want
+* Click anyone of the behavior buttons: `Go Straight`, `Idle`, `Turn Left`, `Turn Righ`, `Two-Stage Left`, `U-turn`.
 * The video will automatically pause. Just click "Play" to continue.
-#### 7. End the action at any time you want
+#### 7. End the behavior at any time you want
+* Click the `End` button to end the behavior you clicked.
 * The video will automatically pause. Just click "Play" to continue.
 * The marked action should be saved in the csv file.
 #### 8. Save and exit :+1:
