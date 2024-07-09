@@ -133,7 +133,7 @@ class SensorFusion:
 
 
     # 處理IMU資料
-    def Axis_Process(self, data_path: str, save_path: str, app_time_error, window_size_sec=4) -> None:
+    def Axis_Process(self, data_path: str, save_path: str, app_time_error, window_size_sec=0) -> None:
         """
         Function: Used for processing data from a car-mounted Axis.
 
@@ -161,7 +161,7 @@ class SensorFusion:
         start_time_str = start_time_str.split(' UTC')[0]
         start_datetime = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S.%f')
         
-        # Subtract some seconds from the start time (The APP's error: slower than real time)
+        # Subtract some seconds from the start time (The APP's error: slower than real time + 1)
         start_datetime = start_datetime - timedelta(seconds=app_time_error)
 
         # Read the Accelerometer and Gyroscope sheets
@@ -431,6 +431,18 @@ class SensorFusion:
         Axis_Raw_Data = pd.read_csv(axis_data_path)
         #Axis_Raw_Data = Axis_Raw_Data.drop('Unnamed: 0',axis=1)
 
+        # 檢查是否存在 'Action' 欄位
+        if 'Action' in Axis_Raw_Data.columns:
+            # 提取 'Action' 欄位
+            action_column = Axis_Raw_Data[['Action']]
+            
+            # 將提取的欄位儲存為新的 CSV 檔案
+            new_file_path = f'{axis_data_path.rstrip(".csv")}_only_mark.csv'
+            action_column.to_csv(new_file_path, index=False)
+            print(f"Action欄位已成功儲存至 {new_file_path}")
+        else:
+            print(f"Error: Action欄位不存在於 {axis_data_path}")
+
     
         Merge_Data_No_Feature = ['No']
         Merge_Data_No = []
@@ -534,7 +546,7 @@ class SensorFusion:
         inv_rotation_matrix = np.linalg.inv(rotation_matrix)
 
         # Apply the inverse rotation matrix to each set of angles
-        for i in tqdm(range(len(angles_array))):
+        for i in tqdm(range(len(angles_array)), desc="Calibrating angle data"):
             # Convert angles to radians
             angles = np.radians(angles_array[i, :])
 
@@ -609,7 +621,7 @@ class SensorFusion:
         # Copy the dataset to prevent modifying the original one
         calibrated_data = dataset.copy()  
     
-        for feature in features:
+        for feature in tqdm(features, desc="Calibrating Acceleration & Angular Velocity data"):
             # Compute the mean of the first k samples
             mean_value = dataset[feature][:k].mean()
         
@@ -709,7 +721,7 @@ class SensorFusion:
         filtered_data_array = np.zeros_like(data_array)
 
         # Apply the Kalman filter
-        for i in tqdm(range(data_array.shape[0])):
+        for i in tqdm(range(data_array.shape[0]), desc="Applying Kalman filter"):
             measurement = data_array[i, :].reshape(-1, 1)
 
             # Predict the next state
@@ -956,7 +968,7 @@ class AutoTag:
         if method == "dbscan":
             model = methods[method]()
         else:
-            model = methods[method](n_clusters=n_clusters)
+            model = methods[method](n_clusters=n_clusters, random_state=42)
 
         # 訓練模型並進行分群
         model.fit(dataset[feature])
@@ -1194,8 +1206,8 @@ class DrivePSTs:
         actions = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Two-Stage Left', 'U-turn']
 
         self.models = []
-        for action in actions:
-            data = train_data.loc[train_data['Action'] == action, 'Action Element'].astype(int).tolist()
+        for action in tqdm(actions, desc="Training VoMM"):  # 每個action創建一個model
+            data = train_data.loc[train_data['Action'] == action, 'Action Element'].astype(int).tolist()  # 為每個action提取Action Element
             model = ppm()
             model.fit(data, d=l, alphabet_size=k)
             self.models.append(model)
@@ -1212,11 +1224,11 @@ class DrivePSTs:
         predictions = []
         actions = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Two-Stage Left', 'U-turn']
 
-        for num in tqdm(range(len(action_element_list))):
+        for num in tqdm(range(len(action_element_list)), desc="Testing VoMM"):
             max_score = float('-inf')
             selected_model = None
 
-            for model, action in zip(self.models, actions):
+            for model, action in zip(self.models, actions):  # 挑選分數最大的動作模型作為輸出動作
                 scores = [math.exp(model.logpdf(action_element_list[max(0, num-i):num])) ** (1/i) for i in range(6, 30)]
                 model_score = max(scores)
 
@@ -1227,7 +1239,7 @@ class DrivePSTs:
             predictions.append(selected_model)
 
         data_set['Predict'] = predictions
-        data_set['Filter_Predict'] = self.filter_actions(data_set['Predict'], frequency)
+        data_set['Filter_Predict'] = self.filter_actions(data_set['Predict'], frequency)  # 過濾雜訊動作之後的動作
 
         if save_path:
             self._save_dataframe(data_set, save_path)
@@ -1302,7 +1314,7 @@ class DrivePSTs:
 
 
         
-    def filter_actions(self, dataset, frequency):
+    def filter_actions(self, dataset, frequency):  # 移除異常動作(噪音動作)
         filtered_data = []
         previous_action = None
         for i, action in enumerate(dataset):
@@ -1773,6 +1785,9 @@ class else_:
         7. Calculating_Time: 影片中標記換算時間使用。
            用法：Calculating_Time(self, Video_Ecu_Time, Video_Mark_Time, Real_Ecu_Time)
 
+        8. Calculate_behavior_count: 計算每個駕駛行為的數量
+           用法：Calculate_behavior_count(self, Dataset_path)   
+
         """
         print(intro)
 
@@ -2182,7 +2197,50 @@ class else_:
                 plt.plot(range(len(Test_Data_slice)), Feature_Value, label=f'{Feature}')
 
             return DataSet
-        
+
+    def Calculate_behavior_count(self, Dataset_path: str):
+        # 讀取CSV文件
+        df = pd.read_csv(Dataset_path, skip_blank_lines=False)
+
+        # 初始化變數
+        last_action = None
+        action_counts = {}
+        total_counts = {}
+
+        # 遍歷每一行
+        for action in df['Action']:
+            if str(action)!= 'nan':
+                # 更新總行數
+                if action not in total_counts:
+                    total_counts[action] = 0
+                total_counts[action] += 1
+
+                # 更新區域次數
+                if action!= last_action:
+                    if action not in action_counts:
+                        action_counts[action] = 0
+                    action_counts[action] += 1
+            last_action = action
+
+        # 繪製總行數長條圖
+        actions = list(action_counts.keys())
+        counts = list(action_counts.values())
+        total_counts_list = [total_counts[action] for action in actions]
+        colors = plt.cm.viridis(np.linspace(0, 1, len(actions)))
+
+        plt.bar(actions, total_counts_list, color=colors)
+        plt.xlabel('Behavior')
+        plt.ylabel('Snapshot Count')
+        plt.title('Behavior Snapshot Counts (Behavior Counts)')
+        plt.xticks(rotation=45)  # 旋轉文字45度
+
+        # 顯示每個長條的總行數和區域次數
+        for i, (total, count) in enumerate(zip(total_counts_list, counts)):
+            plt.text(i, total, f'{total} ({count})', ha='center', va='bottom')
+
+        plt.tight_layout()
+        plt.show()
+
 
 ################################################################################################################################
 
@@ -2219,7 +2277,7 @@ class ppm:
         for x in context_by_length[self.d]:
             self.context_child[x] = []
 
-    def fit(self,training_data, d=4, alphabet_size = None):
+    def fit(self, training_data, d=4, alphabet_size = None):
         """
         This is the method to call to fit the model to the data.
         training_data should be a sequence of symbols represented by
@@ -2238,12 +2296,11 @@ class ppm:
         self.alphabet_size = alphabet_size
         self.d = d
 
-        counts = self.count_occurrences(tuple(training_data),d=self.d,
-                                   alphabet_size = self.alphabet_size)
+        counts = self.count_occurrences(tuple(training_data), d=self.d, alphabet_size=self.alphabet_size)
 
         self.pdf_dict = self.compute_ppm_probability(counts)
 
-        self.logpdf_dict = dict([(x,np.log(self.pdf_dict[x])) for x in self.pdf_dict.keys()])
+        self.logpdf_dict = dict([(x, np.log(self.pdf_dict[x])) for x in self.pdf_dict.keys()])
 
         # For faster look up  when computing logpdf(observed data).
         self.generate_fast_lookup()
@@ -2293,13 +2350,13 @@ class ppm:
             new_data[:len(prefix)] = prefix
             start = len(prefix)
         else:
-            new_data = np.zeros(length,dtype=int)
+            new_data = np.zeros(length, dtype=int)
             start = 0
 
         for t in range(start,len(new_data)):
             chunk = tuple(new_data[max(t-self.d,0):t])
-            context = self.find_largest_context(chunk,self.context_child,self.d)
-            new_symbol = np.random.choice(self.alphabet_size,p=self.pdf_dict[context])
+            context = self.find_largest_context(chunk, self.context_child, self.d)
+            new_symbol = np.random.choice(self.alphabet_size, p=self.pdf_dict[context])
             new_data[t] = new_symbol
 
         return new_data[start:]
@@ -2314,7 +2371,7 @@ class ppm:
                           "Meaning threshold: %f" % self.meaning_threshold,
                           "Kullback-Leibler threshold: %f" % self.kl_threshold])
 
-    def find_contexts(self, training_data, d= 4):
+    def find_contexts(self, training_data, d=4):
         """
         Takes a sequence of observed symbols and finds all contexts of
         length at most d.
@@ -2331,8 +2388,18 @@ class ppm:
 
         N = len(training_data)
 
-        for k in range(1,d+1):
-            contexts = contexts.union([training_data[t:t+k] for t in range(N-k+1)])
+        for k in range(1, d+1):  # 這個 for 迴圈從 1 到 d 進行迭代，每次迭代中，k 表示當前要提取的子序列長度
+            contexts = contexts.union([training_data[t:t+k] for t in range(N-k+1)])  # 取聯集
+
+        # [training_data[t:t+k] for t in range(N-k+1)] 是一個列表推導式，用來生成長度為 k 的所有可能的子序列。
+        # t 從 0 遍歷到 N-k，保證提取的子序列不會超出 training_data 的範圍。
+        # training_data[t:t+k] 提取從索引 t 開始長度為 k 的子序列
+        
+        # 範例：
+        # 假設 training_data 是一個字符串 "abcdef"，d 是 2，那麼：
+        #     當 k=1 時，提取的子序列為：['a', 'b', 'c', 'd', 'e', 'f']。
+        #     當 k=2 時，提取的子序列為：['ab', 'bc', 'cd', 'de', 'ef']。
+        # 這些子序列的聯集將是：{'a', 'b', 'c', 'd', 'e', 'f', 'ab', 'bc', 'cd', 'de', 'ef'}。
 
         return contexts
 
@@ -2361,17 +2428,22 @@ class ppm:
         if alphabet_size == None:
             alphabet_size = max(training_data) + 1
 
-        counts = dict([(x, np.zeros(alphabet_size,dtype=int)) for x in contexts])
+        # 為每個上下文建立一個計數器，用來記錄在訓練數據中每個上下文後面各符號的出現次數
+        # 將每個上下文 x 映射到一個用零填充的長度為 alphabet_size 的 numpy 整數陣列。
+        counts = dict([(x, np.zeros(alphabet_size, dtype=int)) for x in contexts])
 
         # Include the null context as well.
-        counts[()] = np.bincount(training_data,minlength = alphabet_size)
+        counts[()] = np.bincount(training_data, minlength=alphabet_size)  # 計算每個數字在training_data出現的次數
 
         N = len(training_data)
-        for k in range(1,d+1):
+        for k in range(1, d+1):
             for t in range(N-k):
                 s = training_data[t:t+k]
                 sigma = training_data[t+k]
                 counts[s][sigma]  += 1
+        # 計算上下文後綴的出現次數：
+        # 遍歷 training_data 中的每個位置 t，並對每個長度為 k 的子序列 s，以及其後的符號 sigma 進行計數。
+        # 對 counts[s][sigma] 執行加 1 操作，以記錄 s 後面直接跟隨 sigma 的出現次數。
 
         return counts
 
@@ -2408,7 +2480,7 @@ class ppm:
 
         return pdf
 
-    def find_largest_context(self, chunk,fast_lookup_table,d):
+    def find_largest_context(self, chunk, fast_lookup_table, d):
         """Find the largest context that matches the observed chunk of symbols
         and returns it.
 
