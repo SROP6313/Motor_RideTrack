@@ -113,7 +113,7 @@ class VideoPlayer:
         middle_row_frame = tk.Frame(button_frame)
         middle_row_frame.pack(side=tk.TOP)
         self.action_buttons = []
-        actions = ["Go Straight", "Idle", "Turn Left", "Turn Right", "Two-Stage Left", "U-turn"]
+        actions = ["Go Straight", "Idle", "Turn Left", "Turn Right", "Hook Turn", "U-turn"]
         for action in actions:
             btn = tk.Button(middle_row_frame, text=action, command=lambda a=action: self.mark_action(a))
             btn.pack(side=tk.LEFT)
@@ -279,7 +279,7 @@ class VideoPlayer:
             'Idle': 'lightgrey',
             'Turn Left': 'lightgreen',
             'Turn Right': 'coral',
-            'Two-Stage Left': 'yellow',
+            'Hook Turn': 'yellow',
             'U-turn': 'violet'
         }
         actions = list(colors.keys())

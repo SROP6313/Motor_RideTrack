@@ -48,7 +48,7 @@ class VideoPlayer:
         self.pause_button.pack(side=tk.LEFT)
 
         self.action_buttons = []
-        actions = ["Go Straight", "Idle", "Turn Left", "Turn Right", "Two-Stage Left", "U-turn"]
+        actions = ["Go Straight", "Idle", "Turn Left", "Turn Right", "Hook Turn", "U-turn"]
         for action in actions:
             btn = tk.Button(self.root, text=action, command=lambda a=action: self.mark_action(a))
             btn.pack(side=tk.LEFT)
