@@ -1203,7 +1203,7 @@ class DrivePSTs:
 
     def train_vomm(self, train_data, l, k, save_model=None):
         start_time = time.time()
-        actions = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Two-Stage Left', 'U-turn']
+        actions = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Hook Turn', 'U-turn']
 
         self.models = []
         for action in tqdm(actions, desc="Training VoMM"):  # 每個action創建一個model
@@ -1222,7 +1222,7 @@ class DrivePSTs:
         action_element_list = data_set['Action Element'].values.tolist()
         start_time = time.time()
         predictions = []
-        actions = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Two-Stage Left', 'U-turn']
+        actions = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Hook Turn', 'U-turn']
 
         for num in tqdm(range(len(action_element_list)), desc="Testing VoMM"):
             max_score = float('-inf')
@@ -1255,7 +1255,7 @@ class DrivePSTs:
 
     def train_vomm_transition(self, train_data, l, k, save_model=None):
         start_time = time.time()
-        actions = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Two-Stage Left', 'U-turn', 'Transition']
+        actions = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Hook Turn', 'U-turn', 'Transition']
 
         self.models = []
         for action in actions:
@@ -1274,7 +1274,7 @@ class DrivePSTs:
         action_element_list = data_set['Action Element'].values.tolist()
         start_time = time.time()
         predictions = []
-        actions = ['Go Straight', 'Idle','Turn Left', 'Turn Right', 'Two-Stage Left', 'U-turn', 'Transition']
+        actions = ['Go Straight', 'Idle','Turn Left', 'Turn Right', 'Hook Turn', 'U-turn', 'Transition']
 
         for num in tqdm(range(len(action_element_list))):
             max_score = float('-inf')
@@ -1979,7 +1979,7 @@ class else_:
 
             # 繪製第一張圖 (Test_Data_slice[Step_Column_Name])
             plt.figure(figsize=(12, 8))
-            for j, condition in enumerate(['Go Straight', 'Idle', 'Turn Right', 'Turn Left', 'Two-Stage Left', 'U-turn', 'Unlabeled']):
+            for j, condition in enumerate(['Go Straight', 'Idle', 'Turn Right', 'Turn Left', 'Hook Turn', 'U-turn', 'Unlabeled']):
                 condition_points = [idx for idx, val in enumerate(Test_Data_slice[Step_Column_Name]) if val == condition]
                 plt.scatter(Test_Data_slice.index[condition_points], Test_Data_slice['Z-axis Angular Velocity'][condition_points],
                             color=colors[j], label=condition, alpha=0.5)
@@ -1997,7 +1997,7 @@ class else_:
 
             # 繪製第二張圖 (Test_Data_slice['Action'])
             plt.figure(figsize=(12, 8))
-            for j, condition in enumerate(['Go Straight', 'Idle', 'Turn Right', 'Turn Left', 'Two-Stage Left', 'U-turn', 'Unlabeled']):
+            for j, condition in enumerate(['Go Straight', 'Idle', 'Turn Right', 'Turn Left', 'Hook Turn', 'U-turn', 'Unlabeled']):
                 condition_points = [idx for idx, val in enumerate(Test_Data_slice['Action']) if val == condition]
                 plt.scatter(Test_Data_slice.index[condition_points], Test_Data_slice['Z-axis Angular Velocity'][condition_points],
                             color=colors[j], label=condition, alpha=0.5)
@@ -2222,10 +2222,13 @@ class else_:
                     action_counts[action] += 1
             last_action = action
 
-        # 繪製總行數長條圖
-        actions = list(action_counts.keys())
-        counts = list(action_counts.values())
+        # 確定特定順序
+        desired_order = ['Go Straight', 'Idle', 'Turn Left', 'Turn Right', 'Hook Turn', 'U-turn']
+        actions = [action for action in desired_order if action in action_counts]
+        counts = [action_counts[action] for action in actions]
         total_counts_list = [total_counts[action] for action in actions]
+
+        # 繪製總行數長條圖
         colors = plt.cm.viridis(np.linspace(0, 1, len(actions)))
 
         plt.bar(actions, total_counts_list, color=colors)
@@ -2448,37 +2451,57 @@ class ppm:
         return counts
 
     def compute_ppm_probability(self, counts):
+        # 獲取上下文的最大長度
         d = max([len(x) for x in counts.keys()])
+        
+        # 獲取字母表的大小
         alphabet_size = counts[()].shape[0]
+        
+        # 初始化機率分布字典 pdf，每個上下文都對應一個零向量
         pdf = dict([(x, np.zeros(alphabet_size, dtype=np.float64)) for x in counts.keys()])
-
+        
+        # 按上下文長度分組
         byk = [[] for k in range(d + 1)]
         for x in counts.keys():
             byk[len(x)].append(x)
-
+        
+        # 計算根上下文 (空上下文) 的機率分布
         pdf[()] = (counts[()] + 1.0) / (counts[()].sum() + alphabet_size)
-
+        
+        # 對於每個長度 k (從 1 到 d) 的上下文
         for k in range(1, d + 1):
             for x in byk[k]:
+                # 找到在當前上下文中觀察到的符號
                 sigma_observed = np.argwhere(counts[x] > 0).reshape(-1)
                 alphabet_obs_size = len(sigma_observed)
+                
+                # 找到在當前上下文中未觀察到的符號
                 sigma_escaped = np.argwhere(counts[x] == 0).reshape(-1)
+                
+                # 計算分母
                 denominator = alphabet_obs_size + counts[x].sum()
+                
+                # 獲取去掉首字符的上下文
                 x_1 = x[1:]
-
+                
+                # 如果有觀察到的符號，計算逃逸因子
                 if alphabet_obs_size > 0:
                     escape_factor = alphabet_obs_size * 1.0 / denominator
                 else:
                     escape_factor = 1.0
-
+                
+                # 計算觀察到的符號的機率
                 pdf[x][sigma_observed] = counts[x][sigma_observed] * 1.0 / denominator
-
+                
+                # 計算未觀察到的符號的機率
                 if len(sigma_escaped) > 0:
                     pdf[x][sigma_escaped] = escape_factor * pdf[x_1][sigma_escaped] / pdf[x_1][sigma_escaped].sum(axis=0)
-
+                
+                # 正規化機率分布
                 pdf[x] = pdf[x] / pdf[x].sum()
-
+        
         return pdf
+
 
     def find_largest_context(self, chunk, fast_lookup_table, d):
         """Find the largest context that matches the observed chunk of symbols
